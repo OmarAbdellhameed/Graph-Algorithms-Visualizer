@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Graph Algorithm Visualizer — CSCI208</title>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --panel:     #1a1d27;
+      --border:    #2e3145;
+      --accent:    #4f8ef7;
+      --accent2:   #f7794f;
+      --green:     #4fd18a;
+      --yellow:    #f7d44f;
+      --red:       #f74f4f;
+      --text:      #e2e8f0;
+      --text-dim:  #6b7280;
+      --node-def:  #4f8ef7;
+      --node-vis:  #4fd18a;
+      --node-cur:  #f7d44f;
+      --node-src:  #f7794f;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 12px 24px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 1.05rem; letter-spacing: 0.08em; color: var(--accent); white-space: nowrap; }
+    .header-center {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      text-align: center; line-height: 1.3;
+    }
+    header span { font-size: 0.75rem; color: var(--text-dim); white-space: nowrap; }
+
+    /* ── Layout ── */
+    .main {
+      display: grid;
+      grid-template-columns: 280px 1fr 290px;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+      height: 0; /* forces flex children to respect flex:1 height */
+    }
+
+    /* ── Panels ── */
+    .panel {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: visible;
+      min-height: 0;
+      height: 100%;
+    }
+    .panel:last-child { border-right: none; border-left: 1px solid var(--border); }
+    .panel-title {
+      padding: 9px 16px;
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .panel-body {
+      padding: 14px;
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+      max-height: 100%;
+    }
+
+    /* ── Canvas Area ── */
+    .canvas-area {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+    }
+    .canvas-toolbar {
+      padding: 7px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+    .toolbar-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+    .mode-btn {
+      padding: 5px 11px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.73rem;
+      font-family: inherit;
+      transition: all 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .mode-btn.active, .mode-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(79,142,247,0.08);
+    }
+    .mode-btn.danger.active, .mode-btn.danger:hover {
+      border-color: var(--red);
+      color: var(--red);
+      background: rgba(247,79,79,0.08);
+    }
+    canvas {
+      flex: 1;
+      cursor: crosshair;
+      display: block;
+      min-height: 0;
+    }
+    .canvas-hint {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      pointer-events: none;
+      background: rgba(15,17,23,0.85);
+      padding: 4px 10px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    /* Zoom controls */
+    .zoom-controls {
+      position: absolute;
+      bottom: 44px;
+      right: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .zoom-btn {
+      width: 28px; height: 28px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.15s;
+    }
+    .zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Form Elements ── */
+    label { font-size: 0.7rem; color: var(--text-dim); display: block; margin-bottom: 3px; letter-spacing: 0.06em; }
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      padding: 6px 9px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.8rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+
+    .row { display: flex; gap: 7px; align-items: flex-end; }
+    .row > * { flex: 1; min-width: 0; }
+
+    .btn {
+      padding: 7px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: bold;
+      letter-spacing: 0.04em;
+      transition: opacity 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-success { background: var(--green); color: #0f1117; }
+    .btn-danger  { background: var(--red);   color: #fff; }
+    .btn-warn    { background: var(--yellow); color: #0f1117; }
+    .btn-ghost   { background: var(--border); color: var(--text); }
+    .btn:disabled { opacity: 0.38; cursor: not-allowed; }
+
+    .divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+    /* ── Node / Edge lists ── */
+    .tag-list { display: flex; flex-wrap: wrap; gap: 5px; min-height: 24px; }
+    .tag {
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .tag-node { background: rgba(79,142,247,0.15); border: 1px solid var(--accent); color: var(--accent); }
+    .tag-edge { background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-dim); font-size: 0.68rem; }
+    .tag .remove { cursor: pointer; color: inherit; opacity: 0.5; font-size: 0.85rem; line-height: 1; }
+    .tag .remove:hover { opacity: 1; }
+
+    /* Edge list scroll area */
+    .edge-scroll { max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+
+    /* ── Playback controls ── */
+    .playback {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .playback .btn { padding: 5px 10px; font-size: 0.72rem; }
+    .step-counter { font-size: 0.7rem; color: var(--text-dim); white-space: nowrap; }
+
+    /* Speed control */
+    .speed-wrap { display: flex; align-items: center; gap: 5px; }
+    .speed-wrap label { margin: 0; white-space: nowrap; }
+    input[type="range"] {
+      width: 60px; cursor: pointer; accent-color: var(--accent);
+      padding: 0; border: none; background: none;
+    }
+
+    /* ── Step log ── */
+    .step-log {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-height: 0;
+    }
+    .step-item {
+      padding: 7px 10px;
+      border-radius: 4px;
+      border-left: 3px solid transparent;
+      font-size: 0.73rem;
+      line-height: 1.5;
+      color: var(--text-dim);
+      background: rgba(255,255,255,0.02);
+      flex-shrink: 0;
+    }
+    .step-item.active {
+      border-left-color: var(--accent);
+      color: var(--text);
+      background: rgba(79,142,247,0.08);
+    }
+    .step-item .step-num { font-size: 0.62rem; color: var(--text-dim); margin-bottom: 2px; }
+    .step-badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.62rem;
+      margin-right: 4px;
+      font-weight: bold;
+    }
+    .badge-visit  { background: rgba(79,209,138,0.2); color: var(--green); }
+    .badge-relax  { background: rgba(79,142,247,0.2); color: var(--accent); }
+    .badge-done   { background: rgba(79,209,138,0.3); color: var(--green); }
+    .badge-warn   { background: rgba(247,79,79,0.2);  color: var(--red); }
+    .badge-info   { background: rgba(247,212,79,0.2); color: var(--yellow); }
+
+    /* ── Distance table ── */
+    .dist-table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+    .dist-table th, .dist-table td { padding: 4px 7px; text-align: left; border-bottom: 1px solid var(--border); }
+    .dist-table th { color: var(--text-dim); font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; }
+    .dist-table td:last-child { text-align: right; font-weight: bold; color: var(--green); }
+    .dist-table tr.updated td { color: var(--yellow); }
+
+    /* ── Legend ── */
+    .legend { display: flex; flex-wrap: wrap; gap: 7px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.68rem; color: var(--text-dim); }
+    .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Messages ── */
+    .msg { padding: 7px 10px; border-radius: 4px; font-size: 0.75rem; }
+    .msg-error   { background: rgba(247,79,79,0.1);  border: 1px solid var(--red);    color: var(--red); }
+    .msg-success { background: rgba(79,209,138,0.1); border: 1px solid var(--green);  color: var(--green); }
+    .msg-info    { background: rgba(79,142,247,0.1); border: 1px solid var(--accent); color: var(--accent); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⬡ Graph Algorithm Visualizer</h1>
+  <div class="header-center">
+    <span style="font-size:0.6rem;color:var(--text-dim);letter-spacing:0.04em;">Abdalla Hassanien &nbsp;·&nbsp; Omar Abdellhameed &nbsp;·&nbsp; Omar Elnabwy</span>
+  </div>
+  <span>CSCI208 · Spring 2026</span>
+</header>
+
+<div class="main">
+
+  <!-- LEFT PANEL — Graph Builder -->
+  <div class="panel">
+    <div class="panel-title">Graph Builder</div>
+    <div class="panel-body">
+
+      <div>
+        <label>Graph Type</label>
+        <select id="graphType">
+          <option value="undirected">Undirected</option>
+          <option value="directed">Directed</option>
+        </select>
+      </div>
+
+      <hr class="divider"/>
+
+      <!-- Add Node -->
+      <div>
+        <label>Add Node</label>
+        <div class="row">
+          <input type="text" id="nodeInput" placeholder="e.g. A" maxlength="10"/>
+          <button class="btn btn-primary" onclick="addNodeFromInput()" style="flex:0 0 auto;padding:6px 11px;">+</button>
+        </div>
+        <div style="margin-top:7px;">
+          <div class="tag-list" id="nodeList"></div>
+        </div>
+      </div>
+
+      <hr class="divider"/>
+
+      <!-- Add Edge -->
+      <div>
+        <label>Add Edge</label>
+        <div class="row">
+          <div><label>From</label><input type="text" id="edgeFrom" placeholder="A"/></div>
+          <div><label>To</label><input type="text" id="edgeTo" placeholder="B"/></div>
+          <div style="flex:0 0 58px;"><label>Weight</label><input type="number" id="edgeWeight" value="1" min="-999" max="999"/></div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;margin-top:7px;" onclick="addEdgeFromInput()">Add Edge</button>
+        <div style="margin-top:7px;">
+          <div class="edge-scroll" id="edgeList"></div>
+        </div>
+      </div>
+
+      <hr class="divider"/>
+
+      <!-- Algorithm & Run -->
+      <div>
+        <label>Algorithm</label>
+        <select id="algorithmSelect">
+          <option value="bfs">BFS — Breadth-First Search</option>
+          <option value="dfs">DFS — Depth-First Search</option>
+          <option value="dijkstra">Dijkstra's Shortest Path</option>
+          <option value="bellman_ford">Bellman-Ford</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Start Node</label>
+        <input type="text" id="startNode" placeholder="e.g. A"/>
+      </div>
+
+      <button class="btn btn-success" style="width:100%;" onclick="runAlgorithm()">▶ Run Algorithm</button>
+      <button class="btn btn-danger"  style="width:100%;" onclick="clearAll()">✕ Clear All</button>
+
+      <hr class="divider"/>
+
+      <!-- Preset Graphs -->
+      <div>
+        <label>Preset Graphs</label>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <div>
+            <label style="font-size:0.63rem;margin-bottom:3px;">Binary Trees</label>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button class="mode-btn" onclick="loadPreset('tree2')" style="flex:1;padding:4px 5px;font-size:0.66rem;">2 Levels</button>
+              <button class="mode-btn" onclick="loadPreset('tree3')" style="flex:1;padding:4px 5px;font-size:0.66rem;">3 Levels</button>
+              <button class="mode-btn" onclick="loadPreset('tree4')" style="flex:1;padding:4px 5px;font-size:0.66rem;">4 Levels</button>
+              <button class="mode-btn" onclick="loadPreset('tree5')" style="flex:1;padding:4px 5px;font-size:0.66rem;">5 Levels</button>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.63rem;margin-bottom:3px;">Random Graphs</label>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button class="mode-btn" onclick="loadPreset('random1')" style="flex:1;padding:4px 5px;font-size:0.66rem;">Random A</button>
+              <button class="mode-btn" onclick="loadPreset('random2')" style="flex:1;padding:4px 5px;font-size:0.66rem;">Random B</button>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.63rem;margin-bottom:3px;">Country Maps</label>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button class="mode-btn" onclick="loadPreset('romania')"  style="flex:1;padding:4px 5px;font-size:0.66rem;">🇷🇴 Romania</button>
+              <button class="mode-btn" onclick="loadPreset('egypt')"    style="flex:1;padding:4px 5px;font-size:0.66rem;">🇪🇬 Egypt</button>
+              <button class="mode-btn" onclick="loadPreset('france')"   style="flex:1;padding:4px 5px;font-size:0.66rem;">🇫🇷 France</button>
+              <button class="mode-btn" onclick="loadPreset('uae')"      style="flex:1;padding:4px 5px;font-size:0.66rem;">🇦🇪 UAE</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider"/>
+
+      <!-- Legend -->
+      <div>
+        <label>Legend</label>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--node-src)"></div> Source</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--node-cur)"></div> Current</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--node-vis)"></div> Visited</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--node-def)"></div> Unvisited</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CENTER — Canvas -->
+  <div class="canvas-area">
+    <div class="canvas-toolbar">
+      <span style="font-size:0.68rem;color:var(--text-dim);letter-spacing:0.08em;flex-shrink:0;">MODE:</span>
+      <button class="mode-btn active" id="modeMove"   onclick="setMode('move')">✥ Move</button>
+      <button class="mode-btn"        id="modeNode"   onclick="setMode('node')">⊕ Node</button>
+      <button class="mode-btn"        id="modeEdge"   onclick="setMode('edge')">↗ Edge</button>
+      <button class="mode-btn danger" id="modeDelete" onclick="setMode('delete')">⊗ Delete</button>
+      <button class="mode-btn"        onclick="fitToScreen()" title="Fit graph to screen">⤢ Fit</button>
+
+      <div class="toolbar-sep"></div>
+
+      <!-- Playback controls (shown after run) -->
+      <div class="playback" id="playbackControls" style="display:none;">
+        <button class="btn btn-primary" onclick="stepBack()"    id="btnBack"  style="padding:5px 9px;">◀</button>
+        <button class="btn btn-primary" onclick="stepForward()" id="btnNext"  style="padding:5px 9px;">▶</button>
+        <button class="btn btn-warn"    onclick="toggleAuto()"  id="btnAuto">⏵ Auto</button>
+        <button class="btn btn-ghost"   onclick="resetPlayback()">⟳</button>
+        <div class="speed-wrap">
+          <label style="font-size:0.65rem;color:var(--text-dim);">Speed</label>
+          <input type="range" id="speedSlider" min="1" max="10" value="5" oninput="updateSpeed()"/>
+        </div>
+        <span class="step-counter" id="stepCounter">0 / 0</span>
+      </div>
+    </div>
+
+    <canvas id="graphCanvas"></canvas>
+
+    <!-- Zoom controls -->
+    <div class="zoom-controls">
+      <button class="zoom-btn" onclick="zoomBy(1.2)" title="Zoom in">+</button>
+      <button class="zoom-btn" onclick="zoomBy(0.83)" title="Zoom out">−</button>
+      <button class="zoom-btn" onclick="fitToScreen()" title="Fit to screen" style="font-size:0.7rem;">⤢</button>
+    </div>
+
+    <div class="canvas-hint" id="canvasHint">Click to add a node · Drag nodes to reposition · Scroll to zoom</div>
+  </div>
+
+  <!-- RIGHT PANEL — Algorithm Steps -->
+  <div class="panel">
+    <div class="panel-title">Algorithm Steps</div>
+    <div class="panel-body">
+
+      <div id="algoInfo" class="msg msg-info" style="font-size:0.72rem;">
+        Build a graph and press <strong>▶ Run Algorithm</strong> to see step-by-step execution.
+      </div>
+
+      <!-- Distance table (Dijkstra / Bellman-Ford) -->
+      <div id="distSection" class="hidden">
+        <label>Distances from Source</label>
+        <table class="dist-table" id="distTable">
+          <thead><tr><th>Node</th><th>Dist</th><th>Path</th></tr></thead>
+          <tbody id="distTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Step log -->
+      <div id="stepLogSection" class="hidden" style="flex:1;display:flex;flex-direction:column;min-height:0;gap:6px;">
+        <label id="stepLogLabel">Execution Log</label>
+        <div class="step-log" id="stepLog"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────
+let nodes = {};   // { id: {x, y, label} }
+let edges = [];   // [ {from, to, weight} ]
+let nodeIdCounter = 0;
+
+let mode = "move";
+let dragging = null;
+let edgeStart = null;
+let mousePos  = {x:0, y:0};
+
+let algoSteps  = [];
+let currentStep = -1;
+let autoTimer  = null;
+let autoRunning = false;
+let autoInterval = 700; // ms — adjusted by speed slider
+
+// ── Camera transform (pan + zoom) ──
+let camX = 0, camY = 0, camScale = 1;
+let isPanning = false, panStart = {x:0, y:0}, camStart = {x:0, y:0};
+
+const canvas = document.getElementById("graphCanvas");
+const ctx    = canvas.getContext("2d");
+
+// ─────────────────────────────────────────────────────────
+//  CANVAS RESIZE
+// ─────────────────────────────────────────────────────────
+function resizeCanvas() {
+  canvas.width  = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  draw();
+}
+window.addEventListener("resize", resizeCanvas);
+// Use ResizeObserver for accurate sizing
+const ro = new ResizeObserver(() => resizeCanvas());
+ro.observe(canvas);
+setTimeout(resizeCanvas, 30);
+
+// ─────────────────────────────────────────────────────────
+//  COORDINATE HELPERS  (screen <-> world)
+// ─────────────────────────────────────────────────────────
+function screenToWorld(sx, sy) {
+  return {
+    x: (sx - camX) / camScale,
+    y: (sy - camY) / camScale
+  };
+}
+function worldToScreen(wx, wy) {
+  return {
+    x: wx * camScale + camX,
+    y: wy * camScale + camY
+  };
+}
+
+// ─────────────────────────────────────────────────────────
+//  ZOOM & PAN
+// ─────────────────────────────────────────────────────────
+function zoomBy(factor, cx, cy) {
+  if (cx === undefined) { cx = canvas.width/2; cy = canvas.height/2; }
+  const worldPt = screenToWorld(cx, cy);
+  camScale = Math.min(Math.max(camScale * factor, 0.1), 10);
+  camX = cx - worldPt.x * camScale;
+  camY = cy - worldPt.y * camScale;
+  draw();
+}
+
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  zoomBy(factor, e.clientX - rect.left, e.clientY - rect.top);
+}, { passive: false });
+
+// ─────────────────────────────────────────────────────────
+//  FIT TO SCREEN
+// ─────────────────────────────────────────────────────────
+function fitToScreen() {
+  const ns = Object.values(nodes);
+  if (ns.length === 0) { camX = 0; camY = 0; camScale = 1; draw(); return; }
+
+  const xs = ns.map(n => n.x), ys = ns.map(n => n.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+
+  const pad = 70;
+  const W = canvas.width  - 2*pad;
+  const H = canvas.height - 2*pad;
+  const gW = maxX - minX || 1;
+  const gH = maxY - minY || 1;
+
+  camScale = Math.min(W / gW, H / gH, 2); // cap at 2× zoom
+  camX = pad + (W - gW * camScale) / 2 - minX * camScale;
+  camY = pad + (H - gH * camScale) / 2 - minY * camScale;
+  draw();
+}
+
+// ─────────────────────────────────────────────────────────
+//  MODE
+// ─────────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  edgeStart = null;
+  ["modeMove","modeNode","modeEdge","modeDelete"].forEach(id =>
+    document.getElementById(id).classList.remove("active"));
+  const map = {move:"modeMove", node:"modeNode", edge:"modeEdge", delete:"modeDelete"};
+  document.getElementById(map[m]).classList.add("active");
+  canvas.style.cursor = m === "node" ? "crosshair" : m === "delete" ? "not-allowed" : m === "edge" ? "cell" : "default";
+  updateHint();
+  draw();
+}
+
+function updateHint() {
+  const hints = {
+    move:   "Drag nodes to reposition · Scroll to zoom · Middle-drag to pan",
+    node:   "Click empty space to place a node",
+    edge:   edgeStart ? `Edge from '${nodes[edgeStart].label}' — click another node` : "Click a node to start an edge",
+    delete: "Click a node or edge to delete it"
+  };
+  document.getElementById("canvasHint").textContent = hints[mode];
+}
+
+// ─────────────────────────────────────────────────────────
+//  NODE HELPERS
+// ─────────────────────────────────────────────────────────
+const NODE_R = 22;
+
+function addNodeAt(wx, wy, label) {
+  if (!label) label = nextLabel();
+  label = label.trim();
+  if (!label) return null;
+  if (Object.values(nodes).find(n => n.label === label)) {
+    showMsg(`Node '${label}' already exists.`, "error"); return null;
+  }
+  const id = "n" + (nodeIdCounter++);
+  nodes[id] = { x: wx, y: wy, label };
+  syncNodeUI();
+  return id;
+}
+
+function nextLabel() {
+  const existing = new Set(Object.values(nodes).map(n => n.label));
+  for (let c = 65; c <= 90; c++) {
+    const l = String.fromCharCode(c);
+    if (!existing.has(l)) return l;
+  }
+  return "N" + nodeIdCounter;
+}
+
+function addNodeFromInput() {
+  const inp = document.getElementById("nodeInput");
+  const label = inp.value.trim() || nextLabel();
+  // Place in world-space center of visible canvas
+  const center = screenToWorld(canvas.width/2, canvas.height/2);
+  const wx = center.x + (Math.random() - 0.5) * 200;
+  const wy = center.y + (Math.random() - 0.5) * 150;
+  addNodeAt(wx, wy, label);
+  inp.value = "";
+  draw();
+}
+
+function removeNode(id) {
+  delete nodes[id];
+  edges = edges.filter(e => e.from !== id && e.to !== id);
+  syncNodeUI(); syncEdgeUI(); draw();
+}
+
+function getNodeAt(sx, sy) {
+  const w = screenToWorld(sx, sy);
+  for (const [id, n] of Object.entries(nodes)) {
+    const dx = n.x - w.x, dy = n.y - w.y;
+    if (Math.sqrt(dx*dx+dy*dy) <= NODE_R / camScale) return id;
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────
+//  EDGE HELPERS
+// ─────────────────────────────────────────────────────────
+function addEdge(fromId, toId, weight) {
+  weight = parseFloat(weight);
+  if (isNaN(weight)) weight = 1;
+  if (fromId === toId) { showMsg("Self-loops are not supported.", "error"); return; }
+  if (edges.find(e => e.from === fromId && e.to === toId)) {
+    showMsg("This edge already exists.", "error"); return;
+  }
+  edges.push({ from: fromId, to: toId, weight });
+  syncEdgeUI();
+}
+
+function addEdgeFromInput() {
+  const fromLabel = document.getElementById("edgeFrom").value.trim();
+  const toLabel   = document.getElementById("edgeTo").value.trim();
+  const weight    = document.getElementById("edgeWeight").value;
+  const fromId = Object.keys(nodes).find(id => nodes[id].label === fromLabel);
+  const toId   = Object.keys(nodes).find(id => nodes[id].label === toLabel);
+  if (!fromId) { showMsg(`Node '${fromLabel}' not found.`, "error"); return; }
+  if (!toId)   { showMsg(`Node '${toLabel}' not found.`,   "error"); return; }
+  addEdge(fromId, toId, weight);
+  draw();
+}
+
+function getEdgeNear(sx, sy) {
+  const w = screenToWorld(sx, sy);
+  const threshold = 8 / camScale;
+  for (let i = 0; i < edges.length; i++) {
+    const e = edges[i];
+    const a = nodes[e.from], b = nodes[e.to];
+    if (!a || !b) continue;
+    const dx = b.x-a.x, dy = b.y-a.y;
+    const len2 = dx*dx+dy*dy;
+    if (len2 === 0) continue;
+    const t = Math.max(0, Math.min(1, ((w.x-a.x)*dx+(w.y-a.y)*dy)/len2));
+    const px = a.x+t*dx-w.x, py = a.y+t*dy-w.y;
+    if (Math.sqrt(px*px+py*py) < threshold) return i;
+  }
+  return -1;
+}
+
+// ─────────────────────────────────────────────────────────
+//  SYNC UI LISTS
+// ─────────────────────────────────────────────────────────
+function syncNodeUI() {
+  const list = document.getElementById("nodeList");
+  list.innerHTML = "";
+  for (const [id, n] of Object.entries(nodes)) {
+    const tag = document.createElement("div");
+    tag.className = "tag tag-node";
+    tag.innerHTML = `${n.label} <span class="remove" onclick="removeNode('${id}')">×</span>`;
+    list.appendChild(tag);
+  }
+}
+
+function syncEdgeUI() {
+  const list = document.getElementById("edgeList");
+  list.innerHTML = "";
+  const directed = document.getElementById("graphType").value === "directed";
+  edges.forEach((e, i) => {
+    const fl = nodes[e.from]?.label || "?";
+    const tl = nodes[e.to]?.label   || "?";
+    const arrow = directed ? "→" : "—";
+    const tag = document.createElement("div");
+    tag.className = "tag tag-edge";
+    tag.style.width = "100%";
+    tag.innerHTML = `${fl} ${arrow} ${tl} (${e.weight}) <span class="remove" onclick="removeEdgeAt(${i})">×</span>`;
+    list.appendChild(tag);
+  });
+}
+
+function removeEdgeAt(i) {
+  edges.splice(i, 1);
+  syncEdgeUI(); draw();
+}
+
+// ─────────────────────────────────────────────────────────
+//  CANVAS EVENTS
+// ─────────────────────────────────────────────────────────
+canvas.addEventListener("mousedown", e => {
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+
+  // Middle button or space+left = pan
+  if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    isPanning = true;
+    panStart = {x: sx, y: sy};
+    camStart = {x: camX, y: camY};
+    canvas.style.cursor = "grabbing";
+    return;
+  }
+
+  const hit = getNodeAt(sx, sy);
+
+  if (mode === "move") {
+    if (hit) { dragging = hit; canvas.style.cursor = "grabbing"; }
+    else {
+      // Start pan in move mode on empty space
+      isPanning = true;
+      panStart = {x: sx, y: sy};
+      camStart = {x: camX, y: camY};
+      canvas.style.cursor = "grabbing";
+    }
+  }
+  else if (mode === "node") {
+    if (!hit) {
+      const w = screenToWorld(sx, sy);
+      addNodeAt(w.x, w.y, null);
+      draw();
+    }
+  }
+  else if (mode === "edge") {
+    if (hit) {
+      if (!edgeStart) {
+        edgeStart = hit; updateHint(); draw();
+      } else {
+        const w = parseFloat(document.getElementById("edgeWeight").value) || 1;
+        addEdge(edgeStart, hit, w);
+        edgeStart = null; updateHint(); draw();
+      }
+    }
+  }
+  else if (mode === "delete") {
+    if (hit) {
+      removeNode(hit);
+    } else {
+      const ei = getEdgeNear(sx, sy);
+      if (ei !== -1) { edges.splice(ei, 1); syncEdgeUI(); draw(); }
+    }
+  }
+});
+
+canvas.addEventListener("mousemove", e => {
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+  const w  = screenToWorld(sx, sy);
+  mousePos = {x: w.x, y: w.y};
+
+  if (isPanning) {
+    camX = camStart.x + (sx - panStart.x);
+    camY = camStart.y + (sy - panStart.y);
+    draw(); return;
+  }
+
+  if (dragging) {
+    nodes[dragging].x = w.x;
+    nodes[dragging].y = w.y;
+    draw(); return;
+  }
+
+  if (mode === "edge") draw();
+});
+
+canvas.addEventListener("mouseup", e => {
+  dragging = null; isPanning = false;
+  if (mode === "move") canvas.style.cursor = "default";
+});
+canvas.addEventListener("mouseleave", () => { dragging = null; isPanning = false; });
+
+// ─────────────────────────────────────────────────────────
+//  DRAW
+// ─────────────────────────────────────────────────────────
+function getNodeColor(nodeLabel) {
+  if (algoSteps.length === 0 || currentStep < 0) return "#4f8ef7";
+  const step = algoSteps[currentStep];
+  const src = algoSteps[0]?.node;
+  const vis = step.visited || [];
+  const cur = step.node;
+  if (nodeLabel === src) return "#f7794f";
+  if (nodeLabel === cur) return "#f7d44f";
+  if (vis.includes(nodeLabel)) return "#4fd18a";
+  return "#4f8ef7";
+}
+
+function drawGrid() {
+  const gap = 40;
+  // Transform grid lines to account for camera
+  const startX = ((-camX) / camScale) - gap;
+  const startY = ((-camY) / camScale) - gap;
+  const endX   = startX + canvas.width  / camScale + gap * 2;
+  const endY   = startY + canvas.height / camScale + gap * 2;
+  const gx0 = Math.floor(startX / gap) * gap;
+  const gy0 = Math.floor(startY / gap) * gap;
+
+  ctx.strokeStyle = "rgba(30,35,55,0.8)";
+  ctx.lineWidth = 0.5 / camScale;
+  ctx.beginPath();
+  for (let x = gx0; x < endX; x += gap) {
+    ctx.moveTo(x, startY); ctx.lineTo(x, endY);
+  }
+  for (let y = gy0; y < endY; y += gap) {
+    ctx.moveTo(startX, y); ctx.lineTo(endX, y);
+  }
+  ctx.stroke();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.translate(camX, camY);
+  ctx.scale(camScale, camScale);
+
+  // Grid
+  drawGrid();
+
+  const directed = document.getElementById("graphType").value === "directed";
+
+  // ── Edges
+  for (const e of edges) {
+    const a = nodes[e.from], b = nodes[e.to];
+    if (!a || !b) continue;
+
+    let highlighted = false;
+    if (algoSteps.length > 0 && currentStep >= 0) {
+      const step = algoSteps[currentStep];
+      if (step.action === "visit" || step.action === "relax") {
+        if (step.from === nodes[e.from]?.label && step.node === nodes[e.to]?.label) highlighted = true;
+        if (!directed && step.from === nodes[e.to]?.label && step.node === nodes[e.from]?.label) highlighted = true;
+      }
+    }
+
+    ctx.beginPath();
+    ctx.strokeStyle = highlighted ? "#f7d44f" : "#2e3145";
+    ctx.lineWidth   = highlighted ? 2.5 : 1.5;
+
+    if (directed) {
+      drawArrow(ctx, a.x, a.y, b.x, b.y, NODE_R);
+    } else {
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+
+    // Weight label
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+    ctx.fillStyle = highlighted ? "#f7d44f" : "#6b7280";
+    ctx.font = "11px 'Courier New'";
+    ctx.textAlign = "center";
+    ctx.fillText(e.weight, mx + 6, my - 6);
+  }
+
+  // ── Edge preview while drawing
+  if (mode === "edge" && edgeStart && nodes[edgeStart]) {
+    const a = nodes[edgeStart];
+    ctx.beginPath();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = "#4f8ef780";
+    ctx.lineWidth = 1.5;
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(mousePos.x, mousePos.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Glow ring
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, NODE_R + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = "#4f8ef755";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // ── Nodes
+  for (const [id, n] of Object.entries(nodes)) {
+    const color = getNodeColor(n.label);
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, NODE_R, 0, Math.PI * 2);
+    ctx.fillStyle = color + "22";
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.font = `bold ${Math.min(13, 13 * (26 / Math.max(n.label.length * 7, 14)))}px 'Courier New'`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(n.label.length > 4 ? n.label.slice(0,4)+"…" : n.label, n.x, n.y);
+
+    // Distance label below node
+    if (algoSteps.length > 0 && currentStep >= 0) {
+      const step = algoSteps[currentStep];
+      if (step.distances && step.distances[n.label] !== undefined) {
+        const d = step.distances[n.label];
+        ctx.fillStyle = "#f7d44f";
+        ctx.font = "10px 'Courier New'";
+        ctx.textBaseline = "middle";
+        ctx.fillText(d === "∞" ? "∞" : d, n.x, n.y + NODE_R + 12);
+      }
+    }
+  }
+
+  ctx.textBaseline = "alphabetic";
+  ctx.restore();
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, nodeR) {
+  const angle = Math.atan2(y2-y1, x2-x1);
+  const sx = x1 + Math.cos(angle) * nodeR;
+  const sy = y1 + Math.sin(angle) * nodeR;
+  const ex = x2 - Math.cos(angle) * (nodeR + 4);
+  const ey = y2 - Math.sin(angle) * (nodeR + 4);
+
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(ex, ey);
+  ctx.stroke();
+
+  const hs = 9, ha = 0.4;
+  ctx.beginPath();
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.moveTo(ex, ey);
+  ctx.lineTo(ex - hs * Math.cos(angle-ha), ey - hs * Math.sin(angle-ha));
+  ctx.lineTo(ex - hs * Math.cos(angle+ha), ey - hs * Math.sin(angle+ha));
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ─────────────────────────────────────────────────────────
+//  RUN ALGORITHM
+// ─────────────────────────────────────────────────────────
+async function runAlgorithm() {
+  const algorithm  = document.getElementById("algorithmSelect").value;
+  const startLabel = document.getElementById("startNode").value.trim();
+  const directed   = document.getElementById("graphType").value === "directed";
+
+  if (Object.keys(nodes).length === 0) { showMsg("Add at least one node before running.", "error"); return; }
+  if (!startLabel) { showMsg("Enter a start node.", "error"); return; }
+  const startId = Object.keys(nodes).find(id => nodes[id].label === startLabel);
+  if (!startId) { showMsg(`Node '${startLabel}' not found.`, "error"); return; }
+
+  const nodeLabels = Object.values(nodes).map(n => n.label);
+  const edgePayload = edges.map(e => ({ from: nodes[e.from].label, to: nodes[e.to].label, weight: e.weight }));
+  const payload = { algorithm, directed, nodes: nodeLabels, edges: edgePayload, start: startLabel };
+
+  showMsg("Running…", "info");
+
+  try {
+    const resp = await fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if (data.error) { showMsg("Error: " + data.error, "error"); return; }
+
+    algoSteps   = data.steps || [];
+    currentStep = -1;
+
+    renderStepLog(algorithm);
+    if (data.distances) renderDistTable(data.distances, data.paths || {});
+
+    document.getElementById("playbackControls").style.display = "flex";
+    document.getElementById("stepLogSection").classList.remove("hidden");
+
+    stepForward();
+    showMsg(`${algoSteps.length} steps recorded. Use ◀ ▶ to walk through.`, "success");
+
+  } catch (err) {
+    showMsg("Could not reach the server. Make sure Flask is running on port 5000.", "error");
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  PLAYBACK
+// ─────────────────────────────────────────────────────────
+function stepForward() {
+  if (currentStep < algoSteps.length - 1) { currentStep++; updatePlayback(); }
+}
+function stepBack() {
+  if (currentStep > 0) { currentStep--; updatePlayback(); }
+}
+function resetPlayback() {
+  stopAuto(); currentStep = -1; updatePlayback(); draw();
+}
+function toggleAuto() { autoRunning ? stopAuto() : startAuto(); }
+function startAuto() {
+  autoRunning = true;
+  document.getElementById("btnAuto").textContent = "⏸ Pause";
+  autoTimer = setInterval(() => {
+    if (currentStep >= algoSteps.length - 1) { stopAuto(); return; }
+    stepForward();
+  }, autoInterval);
+}
+function stopAuto() {
+  autoRunning = false;
+  clearInterval(autoTimer);
+  document.getElementById("btnAuto").textContent = "⏵ Auto";
+}
+function updateSpeed() {
+  const v = parseInt(document.getElementById("speedSlider").value);
+  // Map 1–10 to 1500ms–100ms (inverse)
+  autoInterval = Math.round(1600 - v * 150);
+  if (autoRunning) { stopAuto(); startAuto(); } // restart with new speed
+}
+
+function updatePlayback() {
+  const total = algoSteps.length;
+  document.getElementById("stepCounter").textContent = `${currentStep + 1} / ${total}`;
+  document.getElementById("btnBack").disabled = currentStep <= 0;
+  document.getElementById("btnNext").disabled = currentStep >= total - 1;
+
+  document.querySelectorAll(".step-item").forEach((el, i) =>
+    el.classList.toggle("active", i === currentStep));
+
+  const active = document.querySelector(".step-item.active");
+  if (active) active.scrollIntoView({ block: "nearest", behavior: "smooth" });
+
+  if (algoSteps[currentStep]?.distances)
+    renderDistTable(algoSteps[currentStep].distances, algoSteps[currentStep].paths || {});
+
+  draw();
+}
+
+// ─────────────────────────────────────────────────────────
+//  STEP LOG
+// ─────────────────────────────────────────────────────────
+function badgeFor(action) {
+  const map = {
+    start:          ["info",  "START"],
+    visit:          ["visit", "VISIT"],
+    dequeue:        ["info",  "DEQUEUE"],
+    push:           ["info",  "PUSH"],
+    relax:          ["relax", "RELAX"],
+    iteration:      ["info",  "PASS"],
+    early_stop:     ["done",  "CONVERGED"],
+    negative_cycle: ["warn",  "NEG CYCLE"],
+    done:           ["done",  "DONE"],
+    already_visited:["info",  "SKIP"],
+    no_neighbors:   ["info",  "LEAF"],
+  };
+  return map[action] || ["info", action.toUpperCase()];
+}
+
+function renderStepLog(algorithm) {
+  const log = document.getElementById("stepLog");
+  log.innerHTML = "";
+  const algo = algorithm.replace("_"," ").toUpperCase();
+  document.getElementById("stepLogLabel").textContent = `${algo} — Execution Log`;
+  document.getElementById("stepLogSection").classList.remove("hidden");
+
+  algoSteps.forEach((step, i) => {
+    const [badgeClass, badgeText] = badgeFor(step.action);
+    const el = document.createElement("div");
+    el.className = "step-item";
+    el.innerHTML = `<div class="step-num">Step ${i+1}</div><span class="step-badge badge-${badgeClass}">${badgeText}</span>${step.description}`;
+    log.appendChild(el);
+  });
+}
+
+function renderDistTable(distances, paths) {
+  document.getElementById("distSection").classList.remove("hidden");
+  const tbody = document.getElementById("distTableBody");
+  tbody.innerHTML = "";
+  for (const [node, dist] of Object.entries(distances)) {
+    const path = paths[node] ? paths[node].join(" → ") : "—";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${node}</td><td>${dist}</td><td style="font-size:0.66rem;color:var(--text-dim)">${path}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  MESSAGES
+// ─────────────────────────────────────────────────────────
+function showMsg(text, type) {
+  const el = document.getElementById("algoInfo");
+  el.className = `msg msg-${type}`;
+  el.innerHTML = text;
+}
+
+// ─────────────────────────────────────────────────────────
+//  CLEAR ALL
+// ─────────────────────────────────────────────────────────
+function clearAll() {
+  nodes = {}; edges = [];
+  algoSteps = []; currentStep = -1;
+  stopAuto(); syncNodeUI(); syncEdgeUI();
+  document.getElementById("playbackControls").style.display = "none";
+  document.getElementById("stepLogSection").classList.add("hidden");
+  document.getElementById("distSection").classList.add("hidden");
+  document.getElementById("stepLog").innerHTML = "";
+  showMsg('Build a graph and press <strong>▶ Run Algorithm</strong> to see step-by-step execution.', "info");
+  draw();
+}
+
+// ─────────────────────────────────────────────────────────
+//  PRESET GRAPHS
+// ─────────────────────────────────────────────────────────
+function loadPreset(name) {
+  clearAll();
+
+  const presets = {
+
+    // ── Binary Trees (world-space coords, will be fitted) ──
+    tree2: {
+      directed: false,
+      nodeList: [
+        {label:"A", x:0,   y:0},
+        {label:"B", x:-120,y:120},
+        {label:"C", x: 120,y:120},
+      ],
+      edgeList: [["A","B",1],["A","C",1]]
+    },
+    tree3: {
+      directed: false,
+      nodeList: [
+        {label:"A", x:0,   y:0},
+        {label:"B", x:-180,y:120},
+        {label:"C", x: 180,y:120},
+        {label:"D", x:-270,y:240},
+        {label:"E", x: -90,y:240},
+        {label:"F", x:  90,y:240},
+        {label:"G", x: 270,y:240},
+      ],
+      edgeList: [["A","B",1],["A","C",1],["B","D",1],["B","E",1],["C","F",1],["C","G",1]]
+    },
+    tree4: {
+      directed: false,
+      nodeList: [
+        {label:"A", x:0,   y:0},
+        {label:"B", x:-280,y:110},
+        {label:"C", x: 280,y:110},
+        {label:"D", x:-420,y:220},
+        {label:"E", x:-140,y:220},
+        {label:"F", x: 140,y:220},
+        {label:"G", x: 420,y:220},
+        {label:"H", x:-490,y:330},
+        {label:"I", x:-350,y:330},
+        {label:"J", x:-210,y:330},
+        {label:"K", x: -70,y:330},
+        {label:"L", x:  70,y:330},
+        {label:"M", x: 210,y:330},
+        {label:"N", x: 350,y:330},
+        {label:"O", x: 490,y:330},
+      ],
+      edgeList: [
+        ["A","B",1],["A","C",1],
+        ["B","D",1],["B","E",1],["C","F",1],["C","G",1],
+        ["D","H",1],["D","I",1],["E","J",1],["E","K",1],
+        ["F","L",1],["F","M",1],["G","N",1],["G","O",1]
+      ]
+    },
+    tree5: {
+      directed: false,
+      nodeList: [
+        {label:"A",  x:0,    y:0},
+        {label:"B",  x:-520, y:100},
+        {label:"C",  x: 520, y:100},
+        {label:"D",  x:-780, y:200},
+        {label:"E",  x:-260, y:200},
+        {label:"F",  x: 260, y:200},
+        {label:"G",  x: 780, y:200},
+        {label:"H",  x:-910, y:310},
+        {label:"I",  x:-650, y:310},
+        {label:"J",  x:-390, y:310},
+        {label:"K",  x:-130, y:310},
+        {label:"L",  x: 130, y:310},
+        {label:"M",  x: 390, y:310},
+        {label:"N",  x: 650, y:310},
+        {label:"O",  x: 910, y:310},
+        {label:"P",  x:-980, y:420},
+        {label:"Q",  x:-840, y:420},
+        {label:"R",  x:-720, y:420},
+        {label:"S",  x:-580, y:420},
+        {label:"T",  x:-460, y:420},
+        {label:"U",  x:-320, y:420},
+        {label:"V",  x:-200, y:420},
+        {label:"W",  x: -60, y:420},
+        {label:"X",  x:  60, y:420},
+        {label:"Y",  x: 200, y:420},
+        {label:"Z",  x: 320, y:420},
+        {label:"AA", x: 460, y:420},
+        {label:"AB", x: 580, y:420},
+        {label:"AC", x: 720, y:420},
+        {label:"AD", x: 840, y:420},
+        {label:"AE", x: 980, y:420},
+      ],
+      edgeList: [
+        ["A","B",1],["A","C",1],
+        ["B","D",1],["B","E",1],["C","F",1],["C","G",1],
+        ["D","H",1],["D","I",1],["E","J",1],["E","K",1],
+        ["F","L",1],["F","M",1],["G","N",1],["G","O",1],
+        ["H","P",1],["H","Q",1],["I","R",1],["I","S",1],
+        ["J","T",1],["J","U",1],["K","V",1],["K","W",1],
+        ["L","X",1],["L","Y",1],["M","Z",1],["M","AA",1],
+        ["N","AB",1],["N","AC",1],["O","AD",1],["O","AE",1]
+      ]
+    },
+
+    // ── Random Graphs ──
+    random1: {
+      directed: false,
+      nodeList: [
+        {label:"A", x: 60,  y: 60},
+        {label:"B", x:300,  y:  0},
+        {label:"C", x:540,  y: 80},
+        {label:"D", x:  0,  y:260},
+        {label:"E", x:270,  y:220},
+        {label:"F", x:480,  y:280},
+        {label:"G", x:140,  y:420},
+        {label:"H", x:430,  y:460},
+        {label:"I", x:580,  y:360},
+      ],
+      edgeList: [
+        ["A","B",4],["A","D",2],["B","C",5],["B","E",3],
+        ["C","F",6],["D","E",7],["D","G",1],["E","F",4],
+        ["E","G",8],["F","H",2],["F","I",3],["G","H",5],
+        ["H","I",6],["C","I",9]
+      ]
+    },
+    random2: {
+      directed: true,
+      nodeList: [
+        {label:"S", x:  0,  y:200},
+        {label:"A", x:200,  y: 50},
+        {label:"B", x:200,  y:360},
+        {label:"C", x:400,  y:140},
+        {label:"D", x:400,  y:320},
+        {label:"E", x:580,  y: 50},
+        {label:"F", x:580,  y:280},
+        {label:"T", x:760,  y:200},
+      ],
+      edgeList: [
+        ["S","A",3],["S","B",5],["A","C",2],["A","E",4],
+        ["B","C",6],["B","D",1],["C","E",3],["C","F",5],
+        ["D","F",4],["E","T",2],["F","T",3],["D","T",8],
+        ["C","D",2]
+      ]
+    },
+
+    // ── Romania ──
+    romania: {
+      directed: false,
+      nodeList: [
+        {label:"Oradea",       x: 120, y:  20},
+        {label:"Zerind",       x:  40, y:  90},
+        {label:"Arad",         x:   0, y: 200},
+        {label:"Timisoara",    x:  30, y: 340},
+        {label:"Lugoj",        x: 130, y: 390},
+        {label:"Mehadia",      x: 155, y: 460},
+        {label:"Drobeta",      x: 120, y: 540},
+        {label:"Craiova",      x: 280, y: 590},
+        {label:"Sibiu",        x: 270, y: 240},
+        {label:"RimnicuVilcea",x: 330, y: 370},
+        {label:"Pitesti",      x: 430, y: 460},
+        {label:"Fagaras",      x: 400, y: 175},
+        {label:"Bucharest",    x: 560, y: 470},
+        {label:"Giurgiu",      x: 540, y: 580},
+        {label:"Urziceni",     x: 670, y: 420},
+        {label:"Hirsova",      x: 760, y: 350},
+        {label:"Eforie",       x: 790, y: 460},
+        {label:"Vaslui",       x: 710, y: 170},
+        {label:"Iasi",         x: 650, y:  90},
+        {label:"Neamt",        x: 520, y:  30},
+      ],
+      edgeList: [
+        ["Oradea","Zerind",71],["Oradea","Sibiu",151],
+        ["Zerind","Arad",75],["Arad","Timisoara",118],
+        ["Arad","Sibiu",140],["Timisoara","Lugoj",111],
+        ["Lugoj","Mehadia",70],["Mehadia","Drobeta",75],
+        ["Drobeta","Craiova",120],["Craiova","RimnicuVilcea",146],
+        ["Craiova","Pitesti",138],["Sibiu","RimnicuVilcea",80],
+        ["Sibiu","Fagaras",99],["RimnicuVilcea","Pitesti",97],
+        ["Fagaras","Bucharest",211],["Pitesti","Bucharest",101],
+        ["Bucharest","Giurgiu",90],["Bucharest","Urziceni",85],
+        ["Urziceni","Hirsova",98],["Urziceni","Vaslui",142],
+        ["Hirsova","Eforie",86],["Vaslui","Iasi",92],
+        ["Iasi","Neamt",87]
+      ]
+    },
+
+    // ── Egypt ──
+    egypt: {
+      directed: false,
+      nodeList: [
+        {label:"Alexandria",  x: 80,  y:  30},
+        {label:"Cairo",       x:260,  y: 100},
+        {label:"Giza",        x:210,  y: 155},
+        {label:"Suez",        x:420,  y: 105},
+        {label:"Port Said",   x:550,  y:  20},
+        {label:"Ismailia",    x:480,  y:  90},
+        {label:"Sinai",       x:590,  y: 170},
+        {label:"Siwa",        x:  0,  y: 200},
+        {label:"Beni Suef",   x:245,  y: 260},
+        {label:"Minya",       x:235,  y: 350},
+        {label:"Asyut",       x:245,  y: 430},
+        {label:"Sohag",       x:260,  y: 510},
+        {label:"Luxor",       x:275,  y: 600},
+        {label:"Aswan",       x:290,  y: 700},
+        {label:"Hurghada",    x:450,  y: 430},
+        {label:"Marsa Alam",  x:470,  y: 570},
+      ],
+      edgeList: [
+        ["Alexandria","Cairo",220],["Alexandria","Siwa",560],
+        ["Cairo","Giza",20],["Cairo","Suez",130],
+        ["Cairo","Beni Suef",115],["Cairo","Ismailia",120],
+        ["Suez","Ismailia",78],["Suez","Sinai",60],
+        ["Ismailia","Port Said",90],["Port Said","Sinai",150],
+        ["Giza","Beni Suef",95],["Beni Suef","Minya",110],
+        ["Minya","Asyut",120],["Asyut","Sohag",95],
+        ["Sohag","Luxor",155],["Luxor","Aswan",215],
+        ["Luxor","Hurghada",280],["Hurghada","Marsa Alam",220],
+        ["Asyut","Hurghada",350],["Marsa Alam","Aswan",280]
+      ]
+    },
+
+    // ── France ──
+    france: {
+      directed: false,
+      nodeList: [
+        {label:"Paris",       x:340, y:100},
+        {label:"Lille",       x:360, y:  0},
+        {label:"Rouen",       x:200, y: 60},
+        {label:"Brest",       x:  0, y:100},
+        {label:"Nantes",      x:100, y:240},
+        {label:"Rennes",      x:100, y:140},
+        {label:"Orleans",     x:300, y:200},
+        {label:"Strasbourg",  x:570, y:100},
+        {label:"Dijon",       x:470, y:220},
+        {label:"Lyon",        x:460, y:350},
+        {label:"Bordeaux",    x:150, y:430},
+        {label:"Toulouse",    x:260, y:540},
+        {label:"Montpellier", x:400, y:540},
+        {label:"Marseille",   x:470, y:590},
+        {label:"Nice",        x:600, y:560},
+        {label:"Grenoble",    x:520, y:440},
+      ],
+      edgeList: [
+        ["Paris","Lille",225],["Paris","Rouen",135],
+        ["Paris","Orleans",130],["Paris","Strasbourg",490],
+        ["Paris","Dijon",315],["Lille","Strasbourg",530],
+        ["Rouen","Brest",390],["Rouen","Rennes",175],
+        ["Brest","Rennes",245],["Rennes","Nantes",110],
+        ["Nantes","Bordeaux",345],["Orleans","Dijon",300],
+        ["Orleans","Nantes",220],["Dijon","Lyon",195],
+        ["Dijon","Strasbourg",335],["Lyon","Grenoble",105],
+        ["Lyon","Marseille",315],["Lyon","Bordeaux",560],
+        ["Bordeaux","Toulouse",245],["Toulouse","Montpellier",245],
+        ["Montpellier","Marseille",170],["Marseille","Nice",200],
+        ["Nice","Grenoble",300],["Grenoble","Marseille",300]
+      ]
+    },
+
+    // ── UAE ──
+    uae: {
+      directed: false,
+      nodeList: [
+        {label:"Dubai",       x:440, y:200},
+        {label:"Abu Dhabi",   x:120, y:340},
+        {label:"Sharjah",     x:510, y:130},
+        {label:"Ajman",       x:560, y: 80},
+        {label:"Fujairah",    x:680, y:160},
+        {label:"Ras Al K.",   x:630, y: 20},
+        {label:"Um Al Q.",    x:600, y: 50},
+        {label:"Al Ain",      x:400, y:420},
+        {label:"Buraimi",     x:340, y:490},
+        {label:"Ruwais",      x:  0, y:190},
+        {label:"Liwa",        x:120, y:540},
+        {label:"Khor Fakkan", x:730, y:240},
+      ],
+      edgeList: [
+        ["Dubai","Sharjah",16],["Dubai","Abu Dhabi",140],
+        ["Dubai","Al Ain",155],["Dubai","Fujairah",130],
+        ["Sharjah","Ajman",10],["Sharjah","Um Al Q.",30],
+        ["Sharjah","Fujairah",120],["Ajman","Um Al Q.",12],
+        ["Um Al Q.","Ras Al K.",25],["Ras Al K.","Fujairah",50],
+        ["Fujairah","Khor Fakkan",20],["Abu Dhabi","Al Ain",160],
+        ["Abu Dhabi","Ruwais",240],["Abu Dhabi","Liwa",200],
+        ["Al Ain","Buraimi",10],["Buraimi","Liwa",300],
+        ["Ruwais","Liwa",180]
+      ]
+    }
+  };
+
+  const preset = presets[name];
+  if (!preset) return;
+
+  document.getElementById("graphType").value = preset.directed ? "directed" : "undirected";
+
+  // Add nodes in world-space coordinates
+  const labelToId = {};
+  for (const nd of preset.nodeList) {
+    const id = addNodeAt(nd.x, nd.y, nd.label);
+    if (id) labelToId[nd.label] = id;
+  }
+
+  // Add edges
+  for (const [fl, tl, w] of preset.edgeList) {
+    const fid = labelToId[fl], tid = labelToId[tl];
+    if (fid && tid) addEdge(fid, tid, w);
+  }
+
+  // Set start node
+  if (preset.nodeList.length > 0)
+    document.getElementById("startNode").value = preset.nodeList[0].label;
+
+  // Fit the graph to the canvas — wait for canvas to be ready
+  requestAnimationFrame(() => {
+    resizeCanvas();
+    fitToScreen();
+  });
+
+  showMsg(`Loaded: <strong>${name}</strong>. Press ▶ Run Algorithm to begin.`, "success");
+}
+
+// ─────────────────────────────────────────────────────────
+//  KEYBOARD SHORTCUTS
+// ─────────────────────────────────────────────────────────
+document.getElementById("nodeInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") addNodeFromInput();
+});
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.key === "m" || e.key === "M") setMode("move");
+  if (e.key === "n" || e.key === "N") setMode("node");
+  if (e.key === "e" || e.key === "E") setMode("edge");
+  if (e.key === "d" || e.key === "D") setMode("delete");
+  if (e.key === "f" || e.key === "F") fitToScreen();
+  if (e.key === "ArrowRight") stepForward();
+  if (e.key === "ArrowLeft")  stepBack();
+});
+
+// Initial draw
+draw();
+</script>
+</body>
+</html>
